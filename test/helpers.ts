@@ -1,0 +1,84 @@
+import { env } from "cloudflare:workers";
+import worker from "../worker/index.ts";
+import { PIN_ITERATIONS, hashPin, newSalt } from "../worker/auth/pin.ts";
+import { buildSeed } from "../seed/build.ts";
+
+export function call(path: string, init: RequestInit & { cookie?: string } = {}) {
+  const headers = new Headers(init.headers);
+  if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  if (init.cookie) headers.set("cookie", init.cookie);
+  return worker.fetch(new Request(`http://app.test${path}`, { ...init, headers }), env);
+}
+
+export function post(path: string, body: unknown, cookie?: string) {
+  return call(path, { method: "POST", body: JSON.stringify(body), cookie });
+}
+
+export async function seedProfiles(scope: "profiles" | "all" = "profiles") {
+  await env.DB.batch(buildSeed({ names: ["Ana", "Luis"], scope }).map((s) => env.DB.prepare(s)));
+}
+
+export async function setPin(profileId: number, pin: string) {
+  const salt = newSalt();
+  const hash = await hashPin(pin, salt, PIN_ITERATIONS);
+  await env.DB.prepare("UPDATE profiles SET pin_salt = ?, pin_hash = ?, pin_iterations = ? WHERE id = ?")
+    .bind(salt, hash, PIN_ITERATIONS, profileId)
+    .run();
+}
+
+/** Crea los dos perfiles con PIN 111111 (Ana, id 1) y 222222 (Luis, id 2). */
+export async function setupProfiles(scope: "profiles" | "all" = "profiles") {
+  await seedProfiles(scope);
+  await setPin(1, "111111");
+  await setPin(2, "222222");
+}
+
+export async function loginAs(profileId: 1 | 2): Promise<string> {
+  const res = await post("/api/auth/login", { profileId, pin: profileId === 1 ? "111111" : "222222" });
+  if (res.status !== 200) throw new Error(`login fallo: ${res.status}`);
+  const setCookie = res.headers.get("set-cookie") ?? "";
+  return setCookie.split(";")[0]!;
+}
+
+/** Instante de mediodia en La Paz (16:00 UTC) de una fecha YYYY-MM-DD. */
+export const noon = (date: string) => Date.parse(`${date}T16:00:00Z`);
+
+export const json = async (res: Response) => (await res.json()) as any;
+
+export function send(method: string, path: string, cookie: string, body?: unknown) {
+  return call(path, { method, cookie, body: body === undefined ? undefined : JSON.stringify(body) });
+}
+
+let sessionSeq = 0;
+export const newId = () => `00000000-0000-4000-8000-${String(++sessionSeq).padStart(12, "0")}`;
+
+export async function startSession(cookie: string, id = newId()) {
+  const res = await send("POST", "/api/sessions/start", cookie, { id });
+  return { res, id, body: await json(res) };
+}
+
+export interface SetLog {
+  /** nombre del ejercicio; por defecto, el primero que no es calentamiento */
+  exercise?: string;
+  value?: number;
+  weightKg?: number | null;
+}
+
+/** Empieza, registra series y termina la sesion de hoy. */
+export async function trainToday(cookie: string, logs: SetLog[] = [{}]) {
+  const { id, body } = await startSession(cookie);
+  const real = body.session.exercises.filter((e: any) => e.kind === "exercise");
+  for (const log of logs) {
+    const target = log.exercise ? real.find((e: any) => e.name === log.exercise) : real[0];
+    if (!target) throw new Error(`ejercicio no encontrado: ${log.exercise}`);
+    await send("PUT", `/api/sessions/${id}/sets`, cookie, {
+      sessionExerciseId: target.id,
+      setNumber: 1,
+      value: log.value ?? 12,
+      weightKg: log.weightKg === undefined ? 10 : log.weightKg,
+    });
+    await send("PUT", `/api/sessions/${id}/exercises/${target.id}/done`, cookie, { done: true });
+  }
+  const res = await send("POST", `/api/sessions/${id}/finish`, cookie, {});
+  return { id, res, body: await json(res) };
+}

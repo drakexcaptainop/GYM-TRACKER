@@ -190,6 +190,14 @@ describe("terminar", () => {
     expect(await streakOf(ana)).toBe(1);
   });
 
+  it("reintentar terminar completa el día si un intento anterior falló después de cerrar la sesión", async () => {
+    const { id } = await trainToday(ana);
+    await env.DB.prepare("DELETE FROM day_log WHERE profile_id = 1 AND date = ?").bind(MON).run();
+    expect(await streakOf(ana)).toBe(0);
+    expect((await send("POST", `/api/sessions/${id}/finish`, ana, {})).status).toBe(200);
+    expect(await streakOf(ana)).toBe(1);
+  });
+
   it("no se puede registrar nada en una sesión ya terminada", async () => {
     const { id, body } = await start(ana);
     const squat = body.session.exercises[6];

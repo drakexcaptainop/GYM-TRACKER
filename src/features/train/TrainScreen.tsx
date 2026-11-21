@@ -43,6 +43,7 @@ function Guided({ initial }: { initial: Session }) {
   const [showGuide, setShowGuide] = useState(false);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
   const [paused, setPaused] = useState(initial.status === "paused");
 
   const current = position ? exercises[position.exercise] : undefined;
@@ -78,7 +79,13 @@ function Guided({ initial }: { initial: Session }) {
 
   const finish = async () => {
     setFinishing(true);
-    await flushQueue();
+    setFinishError(null);
+    // Si algo quedó sin enviar, terminar ahora lo rechazaría como "sesión cerrada": se avisa y se reintenta después.
+    if (!(await flushQueue())) {
+      setFinishError("Hay series sin enviar. Revisa tu conexión e intenta de nuevo.");
+      setFinishing(false);
+      return;
+    }
     try {
       const done = await api<{ summary: SessionSummary }>(`/api/sessions/${initial.id}/finish`, { method: "POST", body: {} });
       setSummary(done.summary);
@@ -86,6 +93,7 @@ function Guided({ initial }: { initial: Session }) {
       // La sesión actual se deja como está para que el resumen siga en pantalla; se limpia al volver al inicio.
       await client.invalidateQueries({ predicate: (q) => q.queryKey[1] !== "current" });
     } catch {
+      setFinishError("No se pudo terminar. Intenta de nuevo.");
       setFinishing(false);
     }
   };
@@ -157,6 +165,7 @@ function Guided({ initial }: { initial: Session }) {
     return (
       <Screen title="¡Terminaste!" subtitle={`${doneCount} de ${total} ejercicios`}>
         <Button block size="lg" disabled={finishing} onClick={finish}>Finalizar entrenamiento</Button>
+        {finishError && <p role="alert" className="mt-3 text-sm text-amber">{finishError}</p>}
       </Screen>
     );
   }
@@ -211,6 +220,7 @@ function Guided({ initial }: { initial: Session }) {
         {!paused && <Button variant="ghost" onClick={() => setStatus("paused")}>Pausar</Button>}
         <Button variant="ghost" disabled={finishing} onClick={finish}>Terminar ahora</Button>
       </div>
+      {finishError && <p role="alert" className="mt-3 text-sm text-amber">{finishError}</p>}
 
       <Sheet open={showGuide} title={current.name} onClose={() => setShowGuide(false)}>
         <GuideView guide={current.exerciseId ? initial.guides[current.exerciseId] : undefined} />

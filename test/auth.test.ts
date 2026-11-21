@@ -119,3 +119,14 @@ describe("acceso por PIN", () => {
     });
   });
 });
+
+describe("bloqueo bajo intentos simultáneos", () => {
+  it("diez PIN incorrectos en paralelo cuentan todos y dejan el perfil bloqueado", async () => {
+    const results = await Promise.all(Array.from({ length: 10 }, () => post("/api/auth/login", { profileId: 1, pin: "000000" })));
+    expect(results.every((r) => r.status === 401 || r.status === 429)).toBe(true);
+    const row = await env.DB.prepare("SELECT failures, locked_until FROM login_lock WHERE profile_id = 1").first<{ failures: number; locked_until: number }>();
+    expect(row!.failures).toBeGreaterThanOrEqual(5);
+    expect(row!.locked_until).toBeGreaterThan(Date.now());
+    expect((await post("/api/auth/login", { profileId: 1, pin: "111111" })).status).toBe(429);
+  });
+});

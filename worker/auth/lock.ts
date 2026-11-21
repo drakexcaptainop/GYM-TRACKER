@@ -1,8 +1,8 @@
 // Bloqueo por perfil tras fallos seguidos, con espera creciente.
 
 export const MAX_FAILURES = 5;
-const BASE_WAIT_MS = 30_000;
-const MAX_WAIT_MS = 15 * 60_000;
+export const BASE_WAIT_MS = 30_000;
+export const MAX_WAIT_MS = 15 * 60_000;
 
 export function waitAfterFailures(failures: number): number {
   if (failures < MAX_FAILURES) return 0;

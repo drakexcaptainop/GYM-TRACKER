@@ -11,9 +11,7 @@ export const dayStatusSchema = z.enum(["completed", "pending", "rest"]);
 export type DayStatus = z.infer<typeof dayStatusSchema>;
 
 /** 1 = lunes ... 7 = domingo */
-export const weekdaySchema = z.number().int().min(1).max(7);
 
-export const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 // ---------- Ejercicios y guias ----------
 

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { deleteCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
-import { MAX_FAILURES, isLocked, waitAfterFailures, type LockRow } from "../auth/lock.ts";
+import { BASE_WAIT_MS, MAX_FAILURES, MAX_WAIT_MS, isLocked, type LockRow } from "../auth/lock.ts";
 import { verifyPin } from "../auth/pin.ts";
 import { SESSION_COOKIE, SESSION_SECONDS, signSession } from "../auth/session.ts";
 import type { AppEnv } from "../env.ts";
@@ -47,21 +47,26 @@ authRoutes.post("/auth/login", async (c) => {
     return c.json({ error: "locked", retryAfterSeconds: Math.ceil((lock.locked_until - now) / 1000) }, 429);
   }
 
+  // El intento se cuenta antes de verificar, en una sola sentencia atómica: así los intentos
+  // simultáneos no pueden leer el mismo contador y saltarse el bloqueo.
+  const counted = await c.env.DB.prepare(
+    `UPDATE login_lock SET failures = failures + 1,
+       locked_until = CASE WHEN failures + 1 >= ?1 THEN ?2 + min(?3, ?4 * (1 << min(failures + 1 - ?1, 5))) ELSE 0 END
+     WHERE profile_id = ?5 AND locked_until <= ?2
+     RETURNING failures, locked_until`,
+  )
+    .bind(MAX_FAILURES, now, MAX_WAIT_MS, BASE_WAIT_MS, profileId)
+    .first<LockRow>();
+  if (!counted) return c.json({ error: "locked", retryAfterSeconds: 1 }, 429);
+
   const ok = await verifyPin(pin, { salt: profile.pin_salt, hash: profile.pin_hash, iterations: profile.pin_iterations });
   if (!ok) {
-    const failures = lock.failures + 1;
-    const wait = waitAfterFailures(failures);
-    await c.env.DB.prepare("UPDATE login_lock SET failures = ?, locked_until = ? WHERE profile_id = ?")
-      .bind(failures, wait > 0 ? now + wait : 0, profileId)
-      .run();
     const body: Record<string, unknown> = { error: "invalid_credentials" };
-    if (failures >= MAX_FAILURES) body.retryAfterSeconds = Math.ceil(wait / 1000);
+    if (counted.failures >= MAX_FAILURES) body.retryAfterSeconds = Math.ceil((counted.locked_until - now) / 1000);
     return c.json(body, 401);
   }
 
-  if (lock.failures > 0) {
-    await c.env.DB.prepare("UPDATE login_lock SET failures = 0, locked_until = 0 WHERE profile_id = ?").bind(profileId).run();
-  }
+  await c.env.DB.prepare("UPDATE login_lock SET failures = 0, locked_until = 0 WHERE profile_id = ?").bind(profileId).run();
 
   const token = await signSession(profile.id, c.env.SESSION_SECRET, Math.floor(now / 1000));
   setCookie(c, SESSION_COOKIE, token, {

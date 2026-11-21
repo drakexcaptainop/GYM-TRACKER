@@ -157,8 +157,9 @@ sessionRoutes.post("/sessions/:id/finish", async (c) => {
       .prepare("UPDATE sessions SET status = 'completed', ended_at = ?, duration_seconds = ?, position = NULL WHERE id = ? AND status != 'completed'")
       .bind(now, Math.max(0, Math.round((now - session.startedAt) / 1000)), id)
       .run();
-    await recordFinishedDay(db, profileId, session.localDate, id);
   }
+  // Idempotente: si un intento anterior terminó la sesión pero falló aquí, reintentar lo completa.
+  await recordFinishedDay(db, profileId, session.localDate, id);
   const finished = (await loadSession(db, profileId, id))!;
   return c.json({ session: finished, summary: summarize(finished) });
 });

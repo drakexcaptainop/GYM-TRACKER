@@ -10,7 +10,15 @@ export interface QueuedWrite {
 }
 
 const KEY = "gt-write-queue";
-let flushing: Promise<void> | null = null;
+
+// Toda lectura-modificación-escritura de la cola pasa por esta cadena, para que enqueue y flush
+// no se pisen entre sí (dos escrituras seguidas, o una durante el envío, no se pierden).
+let chain: Promise<unknown> = Promise.resolve();
+function exclusive<T>(task: () => Promise<T>): Promise<T> {
+  const run = chain.then(task, task);
+  chain = run.catch(() => undefined);
+  return run;
+}
 
 async function read(): Promise<QueuedWrite[]> {
   try {
@@ -32,20 +40,28 @@ export async function pendingCount(): Promise<number> {
   return (await read()).length;
 }
 
-export async function flushQueue(): Promise<void> {
+// Un rechazo definitivo (la petición está mal o el recurso no existe) se descarta;
+// lo transitorio (sin red, error del servidor, demasiadas peticiones, sesión caducada) se conserva.
+function isTransient(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  return error.status === 0 || error.status >= 500 || error.status === 401 || [408, 425, 429].includes(error.status);
+}
+
+let flushing: Promise<boolean> | null = null;
+
+/** Envía en orden lo pendiente. Devuelve true cuando la cola quedó vacía. */
+export function flushQueue(): Promise<boolean> {
   if (flushing) return flushing;
   flushing = (async () => {
     for (;;) {
-      const queue = await read();
-      const next = queue[0];
-      if (!next) return;
+      const next = (await read())[0];
+      if (!next) return true;
       try {
         await api(next.path, { method: next.method, body: next.body });
       } catch (error) {
-        // Sin conexión o error del servidor: se conserva y se reintenta luego. Un rechazo definitivo se descarta.
-        if (!(error instanceof ApiError) || error.status === 0 || error.status >= 500 || error.status === 401) return;
+        if (isTransient(error)) return false;
       }
-      await write((await read()).slice(1));
+      await exclusive(async () => write((await read()).slice(1)));
     }
   })().finally(() => {
     flushing = null;
@@ -54,6 +70,6 @@ export async function flushQueue(): Promise<void> {
 }
 
 export async function enqueue(item: QueuedWrite): Promise<void> {
-  await write([...(await read()), item]);
+  await exclusive(async () => write([...(await read()), item]));
   void flushQueue();
 }

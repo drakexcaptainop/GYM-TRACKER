@@ -38,13 +38,15 @@ export async function closePastDays(db: D1Database, profileId: number, today: st
   const dates = dateRange(from, yesterday).slice(-MAX_CLOSE_DAYS);
   if (dates.length === 0) return;
 
-  await db.batch(
-    dates.map((date) =>
-      db
-        .prepare("INSERT OR IGNORE INTO day_log (profile_id, date, status) VALUES (?, ?, ?)")
-        .bind(profileId, date, kinds.get(weekdayOf(date)) === "session" ? "pending" : "rest"),
-    ),
-  );
+  // Una sola sentencia para cualquier cantidad de días: no depende del tope de consultas por request.
+  const rows = dates.map((date) => [date, kinds.get(weekdayOf(date)) === "session" ? "pending" : "rest"]);
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO day_log (profile_id, date, status)
+       SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?2)`,
+    )
+    .bind(profileId, JSON.stringify(rows))
+    .run();
 }
 
 /**

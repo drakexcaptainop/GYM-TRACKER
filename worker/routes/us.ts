@@ -13,7 +13,7 @@ export const usRoutes = new Hono<AppEnv>();
 const WEEKS_SHOWN = 5;
 
 // "Nosotros" devuelve solo la lista blanca compartida: nombre, racha, sesiones de la semana,
-// estado de hoy, calendario de estados y mensajes recibidos. Nunca lee rutinas, pesos ni series.
+// estado de hoy, calendario de estados y mensajes recibidos. La respuesta nunca incluye rutinas, pesos ni series (el horario solo se usa para derivar estados).
 usRoutes.get("/us", async (c) => {
   const me = c.get("profileId");
   const db = c.env.DB;

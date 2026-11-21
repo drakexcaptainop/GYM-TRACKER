@@ -83,7 +83,8 @@ function Guided({ initial }: { initial: Session }) {
       const done = await api<{ summary: SessionSummary }>(`/api/sessions/${initial.id}/finish`, { method: "POST", body: {} });
       setSummary(done.summary);
       saveRest(null);
-      await client.invalidateQueries();
+      // La sesión actual se deja como está para que el resumen siga en pantalla; se limpia al volver al inicio.
+      await client.invalidateQueries({ predicate: (q) => q.queryKey[1] !== "current" });
     } catch {
       setFinishing(false);
     }
@@ -133,7 +134,16 @@ function Guided({ initial }: { initial: Session }) {
           <div><p className="text-3xl font-bold text-cyan">{summary.totalReps}</p><p className="text-xs text-muted">repeticiones</p></div>
           <div><p className="text-3xl font-bold text-cyan">{summary.durationSeconds ? Math.max(1, Math.round(summary.durationSeconds / 60)) : "–"}</p><p className="text-xs text-muted">minutos</p></div>
         </Card>
-        <Button block size="lg" onClick={() => navigate("/")}>Volver al inicio</Button>
+        <Button
+          block
+          size="lg"
+          onClick={() => {
+            client.setQueryData(["session", "current"], { session: null });
+            navigate("/");
+          }}
+        >
+          Volver al inicio
+        </Button>
       </Screen>
     );
   }

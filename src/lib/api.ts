@@ -37,7 +37,7 @@ export async function api<T>(path: string, { method = "GET", body }: Options = {
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
     const code = typeof data.error === "string" ? data.error : "error";
-    if (res.status === 401 && path !== "/api/auth/login") unauthorizedListeners.forEach((l) => l());
+    if (res.status === 401 && path !== "/api/auth/login" && path !== "/api/me") unauthorizedListeners.forEach((l) => l());
     throw new ApiError(res.status, code, data);
   }
   return data as T;

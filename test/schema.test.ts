@@ -5,7 +5,7 @@ import { buildSeed } from "../seed/build.ts";
 const db = env.DB;
 
 async function runSeed() {
-  await db.batch(buildSeed({ names: ["Ana", "Luis"] }).map((s) => db.prepare(s)));
+  await db.batch(buildSeed({ names: ["Ana", "Luis"], scope: "profiles" }).map((s) => db.prepare(s)));
 }
 
 async function count(table: string) {
@@ -54,6 +54,15 @@ describe("esquema", () => {
     await runSeed();
     expect([await count("profiles"), await count("login_lock")]).toEqual(before);
     expect(before[0]).toBe(2);
+  });
+
+  it("el seed completo repetido deja el mismo numero de ejercicios y rutinas", async () => {
+    const full = () => db.batch(buildSeed({ names: ["Ana", "Luis"] }).map((q) => db.prepare(q)));
+    await full();
+    const before = [await count("exercises"), await count("routines"), await count("routine_day_exercises"), await count("guides")];
+    await full();
+    expect([await count("exercises"), await count("routines"), await count("routine_day_exercises"), await count("guides")]).toEqual(before);
+    expect(before.slice(0, 2)).toEqual([33, 2]);
   });
 
   it("borrar una rutina no toca las sesiones ya guardadas", async () => {

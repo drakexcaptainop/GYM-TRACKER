@@ -14,8 +14,8 @@ export function post(path: string, body: unknown, cookie?: string) {
   return call(path, { method: "POST", body: JSON.stringify(body), cookie });
 }
 
-export async function seedProfiles() {
-  await env.DB.batch(buildSeed({ names: ["Ana", "Luis"] }).map((s) => env.DB.prepare(s)));
+export async function seedProfiles(scope: "profiles" | "all" = "profiles") {
+  await env.DB.batch(buildSeed({ names: ["Ana", "Luis"], scope }).map((s) => env.DB.prepare(s)));
 }
 
 export async function setPin(profileId: number, pin: string) {
@@ -27,8 +27,8 @@ export async function setPin(profileId: number, pin: string) {
 }
 
 /** Crea los dos perfiles con PIN 111111 (Ana, id 1) y 222222 (Luis, id 2). */
-export async function setupProfiles() {
-  await seedProfiles();
+export async function setupProfiles(scope: "profiles" | "all" = "profiles") {
+  await seedProfiles(scope);
   await setPin(1, "111111");
   await setPin(2, "222222");
 }

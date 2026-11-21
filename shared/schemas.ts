@@ -88,3 +88,23 @@ export const warmupSchema = z.object({
     .array(z.object({ name: z.string().trim().min(1).max(80), detail: z.string().max(300).default("") }))
     .max(20),
 });
+
+// ---------- Sesiones ----------
+
+export const startSessionSchema = z.object({ id: z.string().uuid() });
+
+export const setSchema = z.object({
+  sessionExerciseId: z.number().int().positive(),
+  kind: z.enum(["work", "light"]).default("work"),
+  setNumber: z.number().int().min(1).max(50),
+  value: z.number().int().min(0).max(99999).nullable().default(null),
+  weightKg: z.number().min(0).max(1000).nullable().default(null),
+  completedAt: z.number().int().positive().optional(),
+});
+
+export const sessionPatchSchema = z.object({
+  status: z.enum(["in_progress", "paused"]).optional(),
+  position: z.string().max(200).nullable().optional(),
+});
+
+export const exerciseDoneSchema = z.object({ done: z.boolean() });

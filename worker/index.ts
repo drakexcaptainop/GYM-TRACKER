@@ -4,7 +4,9 @@ import { jsonOnly, requireProfile } from "./auth/middleware.ts";
 import type { AppEnv } from "./env.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { exerciseRoutes } from "./routes/exercises.ts";
+import { homeRoutes } from "./routes/home.ts";
 import { routineRoutes } from "./routes/routines.ts";
+import { sessionRoutes } from "./routes/sessions.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -14,6 +16,8 @@ app.get("/api/health", (c) => c.json({ ok: true }));
 app.route("/api", authRoutes);
 app.route("/api", exerciseRoutes);
 app.route("/api", routineRoutes);
+app.route("/api", sessionRoutes);
+app.route("/api", homeRoutes);
 
 app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));
 

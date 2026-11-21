@@ -39,3 +39,12 @@ export async function loginAs(profileId: 1 | 2): Promise<string> {
   const setCookie = res.headers.get("set-cookie") ?? "";
   return setCookie.split(";")[0]!;
 }
+
+/** Instante de mediodia en La Paz (16:00 UTC) de una fecha YYYY-MM-DD. */
+export const noon = (date: string) => Date.parse(`${date}T16:00:00Z`);
+
+export const json = async (res: Response) => (await res.json()) as any;
+
+export function send(method: string, path: string, cookie: string, body?: unknown) {
+  return call(path, { method, cookie, body: body === undefined ? undefined : JSON.stringify(body) });
+}

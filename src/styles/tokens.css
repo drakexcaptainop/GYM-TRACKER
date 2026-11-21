@@ -1,0 +1,14 @@
+/* Tokens de diseño. Fondo negro con azul eléctrico y cian; ámbar como acento.
+   Nunca verde ni rojo. Cada texto sobre su fondo cumple contraste 4,5:1 (ver tokens.test.ts). */
+:root {
+  --bg: #05060a;
+  --surface: #0d1017;
+  --surface-2: #151a26;
+  --line: #243049;
+  --ink: #eef2f8;
+  --muted: #94a0b6;
+  --primary: #4d8bff;
+  --cyan: #22d3ee;
+  --amber: #fbbf24;
+  --on-accent: #05060a;
+}

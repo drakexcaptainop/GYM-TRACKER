@@ -5,8 +5,10 @@ import type { AppEnv } from "./env.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { exerciseRoutes } from "./routes/exercises.ts";
 import { homeRoutes } from "./routes/home.ts";
+import { progressRoutes } from "./routes/progress.ts";
 import { routineRoutes } from "./routes/routines.ts";
 import { sessionRoutes } from "./routes/sessions.ts";
+import { usRoutes } from "./routes/us.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -18,6 +20,8 @@ app.route("/api", exerciseRoutes);
 app.route("/api", routineRoutes);
 app.route("/api", sessionRoutes);
 app.route("/api", homeRoutes);
+app.route("/api", progressRoutes);
+app.route("/api", usRoutes);
 
 app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));
 

@@ -48,3 +48,37 @@ export const json = async (res: Response) => (await res.json()) as any;
 export function send(method: string, path: string, cookie: string, body?: unknown) {
   return call(path, { method, cookie, body: body === undefined ? undefined : JSON.stringify(body) });
 }
+
+let sessionSeq = 0;
+export const newId = () => `00000000-0000-4000-8000-${String(++sessionSeq).padStart(12, "0")}`;
+
+export async function startSession(cookie: string, id = newId()) {
+  const res = await send("POST", "/api/sessions/start", cookie, { id });
+  return { res, id, body: await json(res) };
+}
+
+export interface SetLog {
+  /** nombre del ejercicio; por defecto, el primero que no es calentamiento */
+  exercise?: string;
+  value?: number;
+  weightKg?: number | null;
+}
+
+/** Empieza, registra series y termina la sesion de hoy. */
+export async function trainToday(cookie: string, logs: SetLog[] = [{}]) {
+  const { id, body } = await startSession(cookie);
+  const real = body.session.exercises.filter((e: any) => e.kind === "exercise");
+  for (const log of logs) {
+    const target = log.exercise ? real.find((e: any) => e.name === log.exercise) : real[0];
+    if (!target) throw new Error(`ejercicio no encontrado: ${log.exercise}`);
+    await send("PUT", `/api/sessions/${id}/sets`, cookie, {
+      sessionExerciseId: target.id,
+      setNumber: 1,
+      value: log.value ?? 12,
+      weightKg: log.weightKg === undefined ? 10 : log.weightKg,
+    });
+    await send("PUT", `/api/sessions/${id}/exercises/${target.id}/done`, cookie, { done: true });
+  }
+  const res = await send("POST", `/api/sessions/${id}/finish`, cookie, {});
+  return { id, res, body: await json(res) };
+}

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import { call, json, loginAs, noon, send, setupProfiles } from "./helpers.ts";
+import { call, json, loginAs, newId, noon, send, setupProfiles, startSession, trainToday } from "./helpers.ts";
 
 // Semana del lunes 2026-11-02 al domingo 2026-11-08.
 const MON = "2026-11-02";
@@ -13,8 +13,6 @@ const NEXT_MON = "2026-11-09";
 
 let ana: string;
 let luis: string;
-let counter = 0;
-const newId = () => `00000000-0000-4000-8000-${String(++counter).padStart(12, "0")}`;
 
 function goTo(date: string) {
   vi.setSystemTime(noon(date));
@@ -32,20 +30,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function start(cookie: string, id = newId()) {
-  const res = await send("POST", "/api/sessions/start", cookie, { id });
-  return { res, id, body: await json(res) };
-}
-
-/** Empieza, registra una serie en el primer ejercicio y termina. */
-async function trainToday(cookie: string) {
-  const { id, body } = await start(cookie);
-  const first = body.session.exercises.find((e: any) => e.kind === "exercise");
-  await send("PUT", `/api/sessions/${id}/sets`, cookie, { sessionExerciseId: first.id, setNumber: 1, value: 12, weightKg: 10 });
-  await send("PUT", `/api/sessions/${id}/exercises/${first.id}/done`, cookie, { done: true });
-  const res = await send("POST", `/api/sessions/${id}/finish`, cookie, {});
-  return { id, res, body: await json(res) };
-}
+const start = startSession;
 
 const streakOf = async (cookie: string) => (await json(await call("/api/home", { cookie }))).streak as number;
 
